@@ -15,7 +15,7 @@ PDF_DIR = "pdf_prints"
 st.set_page_config(page_title="Cake Hut ERP", page_icon="🎂", layout="wide")
 
 # -----------------------------------------------------------------------------
-# DYNAMIC CREDENTIALS & SESSION STATE INITIALIZATION (Username: admin | Password: 12345)
+# DYNAMIC CREDENTIALS & ETERNAL DEFAULT ADMIN CONFIGURATION
 # -----------------------------------------------------------------------------
 if 'credentials' not in st.session_state:
     hashed_password = stauth.Hasher.hash('12345')
@@ -102,9 +102,32 @@ elif authentication_status:
                 "Ingredient Name", "Base Unit", "Total Purchased", "Total Utilized", "Current Stock Left"
             ])
 
+            df_recipe_templates = pd.DataFrame(columns=[
+                "Recipe Name", "Ingredient Name", "Default Qty", "Unit"
+            ])
+
+            default_templates = [
+                ("Standard Sponge (1 Pound)", "Flour", 250.0, "grams"),
+                ("Standard Sponge (1 Pound)", "Sugar", 200.0, "grams"),
+                ("Standard Sponge (1 Pound)", "Eggs", 4.0, "pcs"),
+                ("Standard Sponge (1 Pound)", "Oil", 100.0, "ml"),
+                ("Chocolate Sponge (1 Pound)", "Flour", 220.0, "grams"),
+                ("Chocolate Sponge (1 Pound)", "Cocoa Powder", 30.0, "grams"),
+                ("Chocolate Sponge (1 Pound)", "Sugar", 200.0, "grams"),
+                ("Chocolate Sponge (1 Pound)", "Eggs", 4.0, "pcs"),
+                ("Chocolate Sponge (1 Pound)", "Oil", 100.0, "ml"),
+            ]
+            for r_name, i_name, q_val, u_val in default_templates:
+                df_recipe_templates = pd.concat([df_recipe_templates, pd.DataFrame([{
+                    "Recipe Name": r_name,
+                    "Ingredient Name": i_name,
+                    "Default Qty": q_val,
+                    "Unit": u_val
+                }])], ignore_index=True)
+
             initial_ingredients = [
                 ("Flour", "grams"), ("Sugar", "grams"), ("Eggs", "pcs"), ("Oil", "ml"), 
-                ("Fondant", "grams"), ("Colors", "ml"), ("Cream", "ml"), ("Fox Balls", "pcs")
+                ("Cocoa Powder", "grams"), ("Fondant", "grams"), ("Colors", "ml"), ("Cream", "ml"), ("Fox Balls", "pcs")
             ]
             for ing, b_unit in initial_ingredients:
                 df_inventory = pd.concat([df_inventory, pd.DataFrame([{
@@ -120,6 +143,7 @@ elif authentication_status:
                 df_purchases.to_excel(writer, sheet_name="Material_Purchases", index=False)
                 df_recipes.to_excel(writer, sheet_name="Recipes", index=False)
                 df_inventory.to_excel(writer, sheet_name="Inventory", index=False)
+                df_recipe_templates.to_excel(writer, sheet_name="Recipe_Templates", index=False)
 
     def check_and_replace_weekly_backup():
         init_directories()
@@ -145,12 +169,17 @@ elif authentication_status:
             purchases = pd.read_excel(DB_FILE, sheet_name="Material_Purchases")
             recipes = pd.read_excel(DB_FILE, sheet_name="Recipes")
             inventory = pd.read_excel(DB_FILE, sheet_name="Inventory")
+            try:
+                recipe_templates = pd.read_excel(DB_FILE, sheet_name="Recipe_Templates")
+            except:
+                recipe_templates = pd.DataFrame(columns=["Recipe Name", "Ingredient Name", "Default Qty", "Unit"])
         except Exception:
             init_db()
             orders = pd.read_excel(DB_FILE, sheet_name="Orders")
             purchases = pd.read_excel(DB_FILE, sheet_name="Material_Purchases")
             recipes = pd.read_excel(DB_FILE, sheet_name="Recipes")
             inventory = pd.read_excel(DB_FILE, sheet_name="Inventory")
+            recipe_templates = pd.DataFrame(columns=["Recipe Name", "Ingredient Name", "Default Qty", "Unit"])
         
         if "Address" not in orders.columns:
             orders["Address"] = "N/A"
@@ -184,14 +213,15 @@ elif authentication_status:
             inventory.at[idx, "Total Utilized"] = tot_utilized
             inventory.at[idx, "Current Stock Left"] = tot_purchased - tot_utilized
 
-        return orders, purchases, recipes, inventory
+        return orders, purchases, recipes, inventory, recipe_templates
 
-    def save_data(orders, purchases, recipes, inventory):
+    def save_data(orders, purchases, recipes, inventory, recipe_templates):
         with pd.ExcelWriter(DB_FILE, engine='openpyxl') as writer:
             orders.to_excel(writer, sheet_name="Orders", index=False)
             purchases.to_excel(writer, sheet_name="Material_Purchases", index=False)
             recipes.to_excel(writer, sheet_name="Recipes", index=False)
             inventory.to_excel(writer, sheet_name="Inventory", index=False)
+            recipe_templates.to_excel(writer, sheet_name="Recipe_Templates", index=False)
 
     def erase_entire_database():
         if os.path.exists(DB_FILE):
@@ -202,7 +232,7 @@ elif authentication_status:
         init_db()
 
     # -----------------------------------------------------------------------------
-    # PDF REPORT & UNIFIED INVOICE UTILITIES (Saved directly in pdf_prints/)
+    # PDF REPORT & UNIFIED INVOICE UTILITIES
     # -----------------------------------------------------------------------------
     def generate_invoice_pdf(order_row, recipe_rows):
         init_directories()
@@ -223,7 +253,7 @@ elif authentication_status:
 
         title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=18, textColor=colors.HexColor('#9B59B6'), spaceAfter=2)
         story.append(Paragraph("CAKE HUT HARIPUR", title_style))
-        story.append(Paragraph("<b>Contact:</b> 0310586903", styles['Normal']))
+        story.append(Paragraph("<b>Contact:</b> 03151593937", styles['Normal']))
         story.append(Paragraph("<b>OFFICIAL CUSTOMER & RIDER COLLECTION INVOICE SLIP</b>", styles['Heading3']))
         story.append(Spacer(1, 10))
 
@@ -266,15 +296,15 @@ elif authentication_status:
         ]))
         story.append(t_coll)
         story.append(Spacer(1, 20))
-        story.append(Paragraph("Thank you for choosing Cake Hut Haripur! For queries call 0310586903.", styles['Normal']))
+        story.append(Paragraph("Thank you for choosing Cake Hut Haripur! For queries call 03151593937.", styles['Normal']))
 
         doc.build(story)
         return pdf_path
 
     # -----------------------------------------------------------------------------
-    # STREAMLIT UI & SINGLE-CLICK BUTTON NAVIGATION ARCHITECTURE
+    # STREAMLIT UI & CONSISTENT NAVIGATION ARCHITECTURE
     # -----------------------------------------------------------------------------
-    orders_df, purchases_df, recipes_df, inventory_df = load_data()
+    orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df = load_data()
 
     if "nav_mode" not in st.session_state:
         st.session_state.nav_mode = "Dashboard Overview"
@@ -283,27 +313,25 @@ elif authentication_status:
     st.sidebar.markdown("<p style='font-size: small; color: gray; text-align: center;'>Bakery Enterprise System</p>", unsafe_allow_html=True)
     st.sidebar.divider()
 
+    def sidebar_nav_button(label, target_mode):
+        if st.sidebar.button(label, use_container_width=True):
+            st.session_state.nav_mode = target_mode
+            st.rerun()
+
     st.sidebar.markdown("### 🔄 Sequential Workflow")
-    if st.sidebar.button("📊 Dashboard Overview", use_container_width=True):
-        st.session_state.nav_mode = "Dashboard Overview"
-    if st.sidebar.button("1️⃣ Take Customer Order", use_container_width=True):
-        st.session_state.nav_mode = "1. Log Customer Order"
-    if st.sidebar.button("2️⃣ Log Kitchen Consumption", use_container_width=True):
-        st.session_state.nav_mode = "2. Log Consumption / Recipe"
-    if st.sidebar.button("3️⃣ Register Material Expense", use_container_width=True):
-        st.session_state.nav_mode = "3. Log Material Expense"
+    sidebar_nav_button("📊 Dashboard Overview", "Dashboard Overview")
+    sidebar_nav_button("⏳ Pending Orders Control Panel", "Pending Orders")
+    sidebar_nav_button("📦 Pending Inventory Dashboard", "Inventory & Shopping")
+    sidebar_nav_button("📋 Pending Orders & Invoices", "Orders & Invoices")
+    sidebar_nav_button("1️⃣ Take Customer Order", "1. Log Customer Order")
+    sidebar_nav_button("2️⃣ Log Kitchen Consumption", "2. Log Consumption / Recipe")
+    sidebar_nav_button("3️⃣ Register Material Expense", "3. Log Material Expense")
 
     st.sidebar.markdown("### 📁 ERP Ledgers & Reports")
-    if st.sidebar.button("⏳ Pending Orders Control Panel", use_container_width=True):
-        st.session_state.nav_mode = "Pending Orders"
-    if st.sidebar.button("📋 All Orders & Invoices", use_container_width=True):
-        st.session_state.nav_mode = "Orders & Invoices"
-    if st.sidebar.button("📦 Inventory Stock Ledger", use_container_width=True):
-        st.session_state.nav_mode = "Inventory & Shopping"
-    if st.sidebar.button("📈 Financial Analytics", use_container_width=True):
-        st.session_state.nav_mode = "Analytics & Reports"
-    if st.sidebar.button("⚙️ System Administration & DB", use_container_width=True):
-        st.session_state.nav_mode = "System Settings"
+    sidebar_nav_button("📖 Recipe Templates Manager", "Recipe Templates")
+    sidebar_nav_button("📦 Inventory Stock Ledger", "Inventory & Shopping")
+    sidebar_nav_button("📈 Financial Analytics", "Analytics & Reports")
+    sidebar_nav_button("⚙️ System Administration & DB", "System Settings")
 
     app_mode = st.session_state.nav_mode
 
@@ -348,7 +376,20 @@ elif authentication_status:
         c4.metric("PENDING ORDERS", total_pending)
 
         st.divider()
-        st.markdown("### 🚀 Disciplined ERP Workflow Quick Actions")
+        st.markdown("### 🚀 Quick Access Shortcuts & Management")
+        dash_b1, dash_b2 = st.columns(2)
+        
+        with dash_b1:
+            if st.button("⏳ Pending Orders Panel", use_container_width=True, type="primary", key="dash_btn_pending"):
+                st.session_state.nav_mode = "Pending Orders"
+                st.rerun()
+        with dash_b2:
+            if st.button("📦 Pending Inventory", use_container_width=True, type="primary", key="dash_btn_inv"):
+                st.session_state.nav_mode = "Inventory & Shopping"
+                st.rerun()
+
+        st.divider()
+        st.markdown("### ⚡ Disciplined ERP Workflow Quick Actions")
         col_a, col_b, col_c = st.columns(3)
         
         with col_a:
@@ -371,9 +412,13 @@ elif authentication_status:
         st.header("1️⃣ Step 1: Take & Log Customer Order")
         st.markdown("Record incoming customer specifications, delivery guidelines, and deadlines.")
 
-        with st.form("erp_order_form"):
+        if st.session_state.get('last_order_saved'):
+            st.success(f"✅ Success! Customer order **{st.session_state.last_order_saved}** has been successfully saved to the ERP system!")
+            st.session_state.pop('last_order_saved', None)
+
+        with st.form("erp_order_form", clear_on_submit=True):
             c_name = st.text_input("Customer Name")
-            c_phone = st.text_input("Phone Number")
+            c_phone = st.text_input("Phone Number", value="03151593937")
             c_address = st.text_area("Delivery Address")
             c_type = st.text_input("Cake Flavor / Theme (e.g. Chocolate Truffle Fondant)")
             c_weight = st.text_input("Weight (e.g. 2 lbs)")
@@ -383,7 +428,8 @@ elif authentication_status:
             c_notes = st.text_area("Special Instructions / Design Notes")
             c_status = st.selectbox("Order Status", ["Pending", "Completed"])
             
-            if st.form_submit_button("Save Customer Order to ERP", type="primary"):
+            submitted_order = st.form_submit_button("Save Customer Order to ERP", type="primary")
+            if submitted_order:
                 if not c_name or not c_type:
                     st.error("Please enter Customer Name and Cake Type/Theme!")
                 else:
@@ -415,15 +461,22 @@ elif authentication_status:
                         "Status": c_status
                     }])
                     orders_df = pd.concat([orders_df, new_order], ignore_index=True)
-                    save_data(orders_df, purchases_df, recipes_df, inventory_df)
-                    st.success(f"Order **{order_id}** saved successfully!")
+                    save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
+                    
+                    st.session_state.last_order_saved = order_id
+                    st.balloons()
+                    st.rerun()
 
     # =============================================================================
-    # MODULE 3: STEP 2 - LOG KITCHEN CONSUMPTION
+    # MODULE 3: STEP 2 - LOG KITCHEN CONSUMPTION & WHOLE RECIPES / MATERIALS
     # =============================================================================
     elif app_mode == "2. Log Consumption / Recipe":
-        st.header("2️⃣ Step 2: Log Kitchen Consumption Against Specific Order")
-        st.markdown("Select a baked order and record exact ingredient consumption to automatically deduct inventory.")
+        st.header("2️⃣ Step 2: Log Kitchen Consumption & Apply Recipes")
+        st.markdown("Choose a complete master recipe template or add specific variable/extra kitchen materials (like cream, fondant, colors) to deduct inventory automatically.")
+
+        if st.session_state.get('last_consumption_saved'):
+            st.success(f"✅ Success! Kitchen consumption successfully logged and inventory deducted for order **{st.session_state.last_consumption_saved}**.")
+            st.session_state.pop('last_consumption_saved', None)
 
         if orders_df.empty:
             st.warning("No orders found in database. Complete Step 1 first.")
@@ -435,35 +488,66 @@ elif authentication_status:
             match_order = orders_df[orders_df["Order ID"] == target_id].iloc[0]
             cake_desc = f"{match_order['Cake Type']} ({match_order['Weight (Pounds)']})"
 
-            with st.form("erp_consumption_form"):
-                available_ingredients = inventory_df["Ingredient Name"].tolist() if not inventory_df.empty else []
-                
-                if "erp_cons_rows" not in st.session_state:
-                    st.session_state.erp_cons_rows = 4
+            st.markdown("### 🍰 Choose Complete Master Recipe Template")
+            unique_recipes = recipe_templates_df["Recipe Name"].unique().tolist() if not recipe_templates_df.empty else []
+            selected_recipe = st.selectbox("Select Master Recipe Template", ["-- Select Complete Recipe Template --"] + unique_recipes)
 
-                consumed_items = []
+            recipe_template_items = []
+            if selected_recipe != "-- Select Complete Recipe Template --":
+                sub_t = recipe_templates_df[recipe_templates_df["Recipe Name"] == selected_recipe]
+                for _, tr in sub_t.iterrows():
+                    recipe_template_items.append((tr["Ingredient Name"], tr["Default Qty"], tr["Unit"]))
+                st.info(f"Loaded whole recipe **{selected_recipe}** comprising {len(recipe_template_items)} material items.")
+
+            available_ingredients = inventory_df["Ingredient Name"].tolist() if not inventory_df.empty else []
+            
+            if "erp_cons_rows" not in st.session_state:
+                st.session_state.erp_cons_rows = 3
+
+            with st.form("erp_consumption_form"):
+                st.markdown("#### Review / Customize Recipe & Kitchen Consumption Materials:")
+                
+                template_items_entered = []
+                if recipe_template_items:
+                    st.markdown("**Included Master Recipe Materials:**")
+                    for idx, (t_ing, t_qty, t_unit) in enumerate(recipe_template_items):
+                        col_t1, col_t2, col_t3 = st.columns([2, 1, 1])
+                        with col_t1:
+                            st.text(f"Material: {t_ing}")
+                        with col_t2:
+                            t_q_val = st.number_input(f"Qty {t_ing}", min_value=0.0, value=float(t_qty), step=1.0, key=f"t_qty_{idx}")
+                        with col_t3:
+                            t_u_val = st.text_input(f"Unit {t_ing}", value=str(t_unit), disabled=True, key=f"t_unit_{idx}")
+                        if t_q_val > 0:
+                            template_items_entered.append((t_ing, t_q_val, str(t_unit)))
+
+                st.divider()
+                st.markdown("#### Additional Kitchen Consumption / Extra Materials (Cream, Colors, Fondant, etc.):")
+                variable_items_entered = []
                 for i in range(st.session_state.erp_cons_rows):
                     col1, col2, col3 = st.columns([2, 1, 1])
                     with col1:
-                        ing_sel = st.selectbox(f"Ingredient #{i+1}", ["-- Select --"] + available_ingredients, key=f"erp_ing_{i}")
+                        ing_sel = st.selectbox(f"Material Item #{i+1}", ["-- Select --"] + available_ingredients, key=f"erp_ing_{i}")
                     with col2:
                         qty_sel = st.number_input(f"Qty #{i+1}", min_value=0.0, value=0.0, step=1.0, key=f"erp_qty_{i}")
                     with col3:
                         unit_sel = st.selectbox(f"Unit #{i+1}", ["grams", "kg", "ml", "liter", "pcs", "dozen"], key=f"erp_unit_{i}")
                     
                     if ing_sel != "-- Select --" and qty_sel > 0:
-                        consumed_items.append((ing_sel, qty_sel, unit_sel))
+                        variable_items_entered.append((ing_sel, qty_sel, unit_sel))
 
-                if st.form_submit_button("➕ Add More Rows"):
+                if st.form_submit_button("➕ Add More Material Rows"):
                     st.session_state.erp_cons_rows += 1
                     st.rerun()
 
-                if st.form_submit_button("Save Consumption & Deduct Inventory", type="primary"):
-                    if not consumed_items:
-                        st.error("Please add at least one valid ingredient item and quantity.")
+                submitted_consumption = st.form_submit_button("Save Kitchen Consumption & Deduct Inventory", type="primary")
+                if submitted_consumption:
+                    all_consumed = template_items_entered + variable_items_entered
+                    if not all_consumed:
+                        st.error("No valid materials or ingredients recorded for kitchen consumption.")
                     else:
                         total_recipe_cost = 0.0
-                        for ing, qty, unit in consumed_items:
+                        for ing, qty, unit in all_consumed:
                             base_qty, base_unit = convert_to_base(qty, unit)
                             
                             ing_purchases = purchases_df[purchases_df["Ingredient Name"] == ing]
@@ -491,8 +575,11 @@ elif authentication_status:
                         orders_df.loc[orders_df["Order ID"] == target_id, "Ingredients Cost"] = new_total_cost
                         orders_df.loc[orders_df["Order ID"] == target_id, "Net Profit"] = price_charged - new_total_cost
 
-                        save_data(orders_df, purchases_df, recipes_df, inventory_df)
-                        st.success(f"Kitchen consumption logged successfully for order **{target_id}**!")
+                        save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
+                        
+                        st.session_state.last_consumption_saved = target_id
+                        st.balloons()
+                        st.rerun()
 
     # =============================================================================
     # MODULE 4: STEP 3 - REGISTER MATERIAL EXPENSE
@@ -501,15 +588,20 @@ elif authentication_status:
         st.header("3️⃣ Step 3: Register Material Purchase & Expense")
         st.markdown("Record market purchases to restock inventory and track operating expenses.")
 
-        with st.form("erp_purchase_form"):
-            mat_name = st.text_input("Ingredient Name (e.g. Sugar, Flour, Butter)")
+        if st.session_state.get('last_purchase_saved'):
+            st.success(f"✅ Success! Material expense **{st.session_state.last_purchase_saved}** has been successfully registered and inventory restocked.")
+            st.session_state.pop('last_purchase_saved', None)
+
+        with st.form("erp_purchase_form", clear_on_submit=True):
+            mat_name = st.text_input("Ingredient/Material Name (e.g. Sugar, Flour, Cream, Butter)")
             qty_bought = st.number_input("Quantity Bought", min_value=0.0, step=1.0)
             p_unit = st.selectbox("Purchase Unit", ["kg", "grams", "liter", "ml", "pcs", "dozen", "packet"])
             price_paid = st.number_input("Total Price Paid (Rs.)", min_value=0.0, step=50.0)
             
-            if st.form_submit_button("Register Purchase & Restock Inventory", type="primary"):
+            submitted_purchase = st.form_submit_button("Register Purchase & Restock Inventory", type="primary")
+            if submitted_purchase:
                 if not mat_name or qty_bought <= 0:
-                    st.error("Please enter a valid ingredient name and quantity.")
+                    st.error("Please enter a valid material name and quantity.")
                 else:
                     base_qty, base_unit = convert_to_base(qty_bought, p_unit)
                     exp_id = f"EXP-{1001 + len(purchases_df)}"
@@ -536,8 +628,11 @@ elif authentication_status:
                         }])
                         inventory_df = pd.concat([inventory_df, new_inv], ignore_index=True)
                         
-                    save_data(orders_df, purchases_df, recipes_df, inventory_df)
-                    st.success(f"Material expense registered and inventory restocked for **{mat_name}**!")
+                    save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
+                    
+                    st.session_state.last_purchase_saved = exp_id
+                    st.balloons()
+                    st.rerun()
 
     # =============================================================================
     # MODULE 5: DEDICATED PENDING ORDERS MANAGEMENT
@@ -575,7 +670,7 @@ elif authentication_status:
                         with col_b1:
                             if st.button(f"✅ Mark as Complete", key=f"complete_pending_{row['Order ID']}", type="primary"):
                                 orders_df.loc[orders_df["Order ID"] == row["Order ID"], "Status"] = "Completed"
-                                save_data(orders_df, purchases_df, recipes_df, inventory_df)
+                                save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
                                 st.success(f"Order {row['Order ID']} successfully marked as Completed!")
                                 st.rerun()
                         with col_b2:
@@ -587,15 +682,77 @@ elif authentication_status:
                             if st.button(f"🗑️ Delete Order", key=f"del_pend_{row['Order ID']}"):
                                 orders_df = orders_df[orders_df["Order ID"] != row["Order ID"]]
                                 recipes_df = recipes_df[recipes_df["Order ID Link"] != row["Order ID"]]
-                                save_data(orders_df, purchases_df, recipes_df, inventory_df)
+                                save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
                                 st.success(f"Order {row['Order ID']} deleted successfully!")
                                 st.rerun()
 
     # =============================================================================
-    # MODULE 6: ORDERS, INVOICES & ROW-LEVEL DELETION
+    # MODULE 6: WHOLE RECIPE TEMPLATES MANAGER (MULTI-MATERIAL PROVISION)
+    # =============================================================================
+    elif app_mode == "Recipe Templates":
+        st.header("📖 Recipe Templates Manager")
+        st.markdown("Create and manage master recipes comprising multiple materials and exact quantities.")
+
+        if st.session_state.get('last_template_saved'):
+            st.success(f"✅ Success! Complete recipe template has been successfully saved.")
+            st.session_state.pop('last_template_saved', None)
+
+        available_ingredients = inventory_df["Ingredient Name"].tolist() if not inventory_df.empty else []
+
+        if "recipe_rows_count" not in st.session_state:
+            st.session_state.recipe_rows_count = 4
+
+        with st.form("whole_recipe_template_form"):
+            master_recipe_name = st.text_input("Master Recipe Name (e.g. Premium Chocolate Cake Recipe 1lb)")
+            
+            st.markdown("#### Define All Materials & Quantities for this Recipe:")
+            recipe_items_data = []
+            for i in range(st.session_state.recipe_rows_count):
+                rc1, rc2, rc3 = st.columns([2, 1, 1])
+                with rc1:
+                    r_ing = st.selectbox(f"Material Item #{i+1}", ["-- Select Material --"] + available_ingredients, key=f"rt_ing_{i}")
+                with rc2:
+                    r_qty = st.number_input(f"Quantity #{i+1}", min_value=0.0, value=0.0, step=1.0, key=f"rt_qty_{i}")
+                with rc3:
+                    r_unit = st.selectbox(f"Unit #{i+1}", ["grams", "ml", "pcs"], key=f"rt_unit_{i}")
+                
+                if r_ing != "-- Select Material --" and r_qty > 0:
+                    recipe_items_data.append((r_ing, r_qty, r_unit))
+
+            if st.form_submit_button("➕ Add More Material Rows"):
+                st.session_state.recipe_rows_count += 1
+                st.rerun()
+
+            submitted_whole_recipe = st.form_submit_button("Save Complete Master Recipe Template", type="primary")
+            if submitted_whole_recipe:
+                if not master_recipe_name or not recipe_items_data:
+                    st.error("Please enter a recipe name and at least one material item with a valid quantity.")
+                else:
+                    for ing_n, qty_n, unit_n in recipe_items_data:
+                        new_t_row = pd.DataFrame([{
+                            "Recipe Name": master_recipe_name,
+                            "Ingredient Name": ing_n,
+                            "Default Qty": qty_n,
+                            "Unit": unit_n
+                        }])
+                        recipe_templates_df = pd.concat([recipe_templates_df, new_t_row], ignore_index=True)
+                    
+                    save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
+                    st.session_state.last_template_saved = True
+                    st.rerun()
+
+        st.divider()
+        st.subheader("Existing Master Recipe Templates")
+        if not recipe_templates_df.empty:
+            st.dataframe(recipe_templates_df, use_container_width=True)
+        else:
+            st.info("No recipe templates found.")
+
+    # =============================================================================
+    # MODULE 7: ORDERS, INVOICES & ROW-LEVEL DELETION
     # =============================================================================
     elif app_mode == "Orders & Invoices":
-        st.header("📋 All Orders Ledger, Invoices & Row Management")
+        st.header("📋 Pending Orders, All Invoices & Row Management")
         
         tab_log, tab_invoice, tab_delete = st.tabs(["All Orders Ledger", "Download Invoice & Complete", "🗑️ Delete Individual Rows"])
         
@@ -625,7 +782,7 @@ elif authentication_status:
                     if st.button("✅ Mark Order as Completed", type="primary", key="inv_tab_btn"):
                         target_id = p_opts[p_sel]
                         orders_df.loc[orders_df["Order ID"] == target_id, "Status"] = "Completed"
-                        save_data(orders_df, purchases_df, recipes_df, inventory_df)
+                        save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
                         st.success(f"Order **{target_id}** marked as Completed!")
                         st.rerun()
                         
@@ -640,19 +797,29 @@ elif authentication_status:
                     target_del_id = del_opts[del_sel]
                     orders_df = orders_df[orders_df["Order ID"] != target_del_id]
                     recipes_df = recipes_df[recipes_df["Order ID Link"] != target_del_id]
-                    save_data(orders_df, purchases_df, recipes_df, inventory_df)
+                    save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
                     st.success(f"Order row **{target_del_id}** deleted successfully!")
                     st.rerun()
 
     # =============================================================================
-    # MODULE 7: INVENTORY STOCK LEDGER & ROW DELETION
+    # MODULE 8: INVENTORY STOCK LEDGER & ROW DELETION
     # =============================================================================
     elif app_mode == "Inventory & Shopping":
-        st.header("📦 Inventory Stock, Consumption Ledger & Management")
+        st.header("📦 Pending Inventory Stock & Shopping Dashboard")
         
-        t1, t2, t3 = st.tabs(["Current Stock Levels", "Kitchen Recipes Ledger", "Market Purchases & Row Deletion"])
+        t1, t2, t3 = st.tabs(["Current Stock Levels (Pending Inventory)", "Kitchen Recipes Ledger", "Market Purchases & Row Deletion"])
         with t1:
+            st.subheader("Pending Inventory Stock Left")
             st.dataframe(inventory_df, use_container_width=True)
+            
+            inv_csv = inventory_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Pending Inventory Report (.csv)",
+                data=inv_csv,
+                file_name=f"Pending_Inventory_{datetime.now().strftime('%Y-%m-%d')}.csv",
+                mime="text/csv",
+                type="primary"
+            )
         with t2:
             st.dataframe(recipes_df, use_container_width=True)
         with t3:
@@ -667,12 +834,12 @@ elif authentication_status:
                 if st.button("🗑️ Delete Selected Purchase Expense Row", type="primary", key="btn_del_purch"):
                     target_exp_id = p_del_opts[p_del_sel]
                     purchases_df = purchases_df[purchases_df["Purchase ID"] != target_exp_id]
-                    save_data(orders_df, purchases_df, recipes_df, inventory_df)
+                    save_data(orders_df, purchases_df, recipes_df, inventory_df, recipe_templates_df)
                     st.success(f"Purchase expense row **{target_exp_id}** deleted successfully!")
                     st.rerun()
 
     # =============================================================================
-    # MODULE 8: FINANCIAL ANALYTICS
+    # MODULE 9: FINANCIAL ANALYTICS
     # =============================================================================
     elif app_mode == "Analytics & Reports":
         st.header("📈 Financial & Operations Analytics")
@@ -698,44 +865,13 @@ elif authentication_status:
             st.bar_chart(fin_df.set_index("Metric"))
 
     # =============================================================================
-    # MODULE 9: SYSTEM ADMINISTRATION, CREDENTIAL SETTINGS & DATABASE MANAGEMENT
+    # MODULE 10: SYSTEM ADMINISTRATION & PERMANENT ETERNAL CREDENTIALS
     # =============================================================================
     elif app_mode == "System Settings":
-        st.header("⚙️ ERP System Administration, Credentials & Database Management")
+        st.header("⚙️ ERP System Administration & Database Management")
         
-        st.subheader("🔐 Change Login Username & Password")
-        st.markdown("Update your system credentials dynamically right from the application interface.")
-        
-        with st.form("change_credentials_form"):
-            current_user = username
-            new_username = st.text_input("New Username", value=current_user)
-            new_name = st.text_input("Display Name", value=st.session_state.credentials['usernames'][current_user]['name'])
-            new_email = st.text_input("Email Address", value=st.session_state.credentials['usernames'][current_user]['email'])
-            new_password = st.text_input("New Password", type="password")
-            confirm_password = st.text_input("Confirm New Password", type="password")
-            
-            if st.form_submit_button("Update Credentials", type="primary"):
-                if not new_username:
-                    st.error("Username cannot be empty!")
-                elif new_password and new_password != confirm_password:
-                    st.error("New passwords do not match!")
-                else:
-                    try:
-                        hashed_pw = stauth.Hasher.hash(new_password) if new_password else st.session_state.credentials['usernames'][current_user]['password']
-                        
-                        updated_creds = {
-                            'usernames': {
-                                new_username: {
-                                    'name': new_name,
-                                    'email': new_email,
-                                    'password': hashed_pw
-                                }
-                            }
-                        }
-                        st.session_state.credentials = updated_creds
-                        st.success("Credentials updated successfully! Please log out and log back in with your new credentials.")
-                    except Exception as e:
-                        st.error(f"Error updating credentials: {e}")
+        st.subheader("🔐 System Credentials Info")
+        st.info("The default user (**admin**) and eternal password (**12345**) remain permanently configured as requested. Internal credential modification is disabled to ensure system stability.")
 
         st.divider()
         st.subheader("📥 Excel Backup Management & Restoration")
@@ -772,7 +908,7 @@ elif authentication_status:
 
         st.divider()
         st.markdown("### ⚠️ Danger Zone: Erase Entire Database")
-        st.error("Permanently wipe out and reset all tables (Orders, Purchases, Recipes, and Inventory Stock) back to an empty state.")
+        st.error("Permanently wipe out and reset all tables (Orders, Purchases, Recipes, Inventory Stock, and Recipe Templates) back to an empty state.")
         
         if "confirm_erase" not in st.session_state:
             st.session_state.confirm_erase = False
